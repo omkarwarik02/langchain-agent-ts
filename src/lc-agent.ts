@@ -3,17 +3,7 @@ import { tool, createAgent } from "langchain";
 import { z } from "zod";
 import { ChatGroq } from "@langchain/groq";
 
-
-const getTime = tool(
-    async ({ timezone}) => new Date().toLocaleString("en-IN",{ timeZone: timezone}),
-    {
-        name:"get_time",
-        description:"Get the current date and time in a given timezone.",
-        schema:z.object({
-            timezone:z.string().describe("IANA timezone name, for example 'Asia/Kolkata'"),
-        }),
-    },
-);
+import { getTime} from "./tools.js"
 
 
 const model = new ChatGroq({
