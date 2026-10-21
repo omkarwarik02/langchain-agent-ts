@@ -6,6 +6,7 @@ import { createAgent,modelRetryMiddleware,
 import { ChatGroq } from "@langchain/groq";
 import { AIMessage, BaseMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { researchTools } from "./tools.js";
+import { resolve } from "node:dns";
 
 const model = new ChatGroq({
     model:"openai/gpt-oss-120b",
@@ -36,6 +37,38 @@ const agent = createAgent({
     "Never answer those from memory. If a tool fails, say so clearly instead of guessing. Cite sources as plain URLs. " +
     "Be efficient: use as few tool calls as needed. Once you have read an official source that answers the question, stop searching and answer.",
 });
+
+    const sleep =(ms:number) => new Promise((resolve)=> setTimeout(resolve, ms));
+
+    async function invokeWithRetry(messages:BaseMessage[], maxRetries = 2){
+        for(let attempt = 0; ; attempt++){
+            try{
+                return await model.invoke(messages);
+            } catch(err){
+                 const  isRateLimit = err instanceof Error && err.message.includes("429");
+                 if(!isRateLimit || attempt >= maxRetries) throw err;
+
+                 console.log(`⏳ Rate limited. Waiting 20s, then retry ${attempt + 1}/${maxRetries}...`);
+                 await sleep(20_000);
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const question = "What's the latest version of React and what changed?";
  let seen = 0; 
@@ -73,7 +106,7 @@ try{
         console.log("\n⚠️ The agent stopped before writing a final answer (tool limit reached).");
 
         try {
-        const final = await model.invoke([
+        const final = await invokeWithRetry([
             ...lastMessages,
             new HumanMessage(
                  "You have no tool calls left. Answer the original question now, using only the information you have already gathered. Cite sources as plain URLs.",
