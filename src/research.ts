@@ -10,7 +10,7 @@ import { resolve } from "node:dns";
 
 const model = new ChatGroq({
     model:"openai/gpt-oss-120b",
-    temperature:0.2,
+    temperature:0,
 });
 
 const agent = createAgent({
@@ -53,18 +53,6 @@ const agent = createAgent({
             }
         }
     }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
