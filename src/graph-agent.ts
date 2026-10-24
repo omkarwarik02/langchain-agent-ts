@@ -20,6 +20,8 @@ import { researchTools } from "./tools.js";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 
 
+
+
 const AgentState = new StateSchema({
   messages: MessagesValue,
 
@@ -41,6 +43,13 @@ const model = new ChatGroq({
 });
 
 const modeWithTools = model.bindTools(researchTools);
+
+const modelRetryPolicy = {
+  maxAttempts: 3,
+  initialInterval:10_000,
+  backoffFactor:2,
+  retryOn:(err:unknown) => err instanceof Error && err.message.includes("429")
+}
 
 const agentNode: GraphNode<typeof AgentState> = async (state) => {
   const response = await modeWithTools.invoke([
@@ -133,9 +142,9 @@ const routeAfterTools = (state: typeof AgentState.State) => {
 };
 
 export const graph = new StateGraph(AgentState)
-  .addNode("agent", agentNode)
+  .addNode("agent", agentNode, { retryPolicy:modelRetryPolicy})
   .addNode("tools", toolsNode)
-  .addNode("final_answer", finalAnswerNode)
+  .addNode("final_answer", finalAnswerNode,{ retryPolicy:modelRetryPolicy})
   .addEdge(START, "agent")
   .addConditionalEdges("agent", routeAfterAgent, ["tools", END])
   .addConditionalEdges("tools", routeAfterTools, ["agent", "final_answer"])
