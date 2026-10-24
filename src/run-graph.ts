@@ -13,6 +13,9 @@ try {
     for (const [nodeName, update] of Object.entries(chunk)) {
       console.log(`\n── ${nodeName} ──`);
 
+      const plan = (update as {plan?:string}).plan;
+      if(plan) console.log(`📝 Plan:\n${plan}`);
+
       const messages = (update as { messages?: BaseMessage[] }).messages ?? [];
 
       for (const msg of messages) {

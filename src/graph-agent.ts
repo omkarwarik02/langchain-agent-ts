@@ -28,6 +28,7 @@ const AgentState = new StateSchema({
   toolCallCount: new ReducedValue(z.number().default(0), {
     reducer: (current, added) => current + added,
   }),
+  plan:z.string().default(""),
 });
 
 const SYSTEM_PROMPT =
@@ -53,7 +54,7 @@ const modelRetryPolicy = {
 
 const agentNode: GraphNode<typeof AgentState> = async (state) => {
   const response = await modeWithTools.invoke([
-    new SystemMessage(SYSTEM_PROMPT),
+    new SystemMessage(SYSTEM_PROMPT + `\n\nYour research plan:\n${state.plan}\n\n`+ "Follow this plan. Do not research anything outside it. Once every step is covered, stop calling tools and answer."),
     ...state.messages,
   ]);
   return { messages: [response] };
@@ -69,6 +70,23 @@ const finalAnswerNode: GraphNode<typeof AgentState> = async (state) => {
   ]);
   return { messages: [response] };
 };
+
+const PLANNER_PROMPT =
+  `Today's date is ${new Date().toDateString()}. ` +
+  "You are a research planner. Write a short plan to answer the user's question using web research. " +
+  "Use 2 or 3 numbered steps. Each step says WHAT information to find, not where to find it. " +
+  "Do not include URLs, website names or version numbers: your own knowledge may be outdated, and the search tool will find current sources. " +
+  "Only plan for what the question actually asks. The last step is always: answer the question. " +
+  "Reply with the numbered steps only, no extra text.";
+
+
+  const plannerNode: GraphNode<typeof AgentState> = async (state) => {
+    const response = await model.invoke([
+      new SystemMessage(PLANNER_PROMPT),
+      ...state.messages,
+    ]);
+    return{plan: String(response.content)};
+  };
 
 const toolsByName: Record<string, StructuredToolInterface> = Object.fromEntries(
   researchTools.map((t) => [t.name, t]),
@@ -142,10 +160,12 @@ const routeAfterTools = (state: typeof AgentState.State) => {
 };
 
 export const graph = new StateGraph(AgentState)
+.addNode("planner", plannerNode,{retryPolicy:modelRetryPolicy})
   .addNode("agent", agentNode, { retryPolicy:modelRetryPolicy})
   .addNode("tools", toolsNode)
   .addNode("final_answer", finalAnswerNode,{ retryPolicy:modelRetryPolicy})
-  .addEdge(START, "agent")
+  .addEdge(START, "planner")
+  .addEdge("planner","agent")
   .addConditionalEdges("agent", routeAfterAgent, ["tools", END])
   .addConditionalEdges("tools", routeAfterTools, ["agent", "final_answer"])
   .addEdge("final_answer", END)
